@@ -40,9 +40,12 @@ RFC3339 `expires_at`, HTTPS `token_endpoint`, and `client_id`; optional fields
 are `client_secret` and `scope`. Refresh endpoints are restricted to Anthropic
 or Claude domains and refresh traffic uses the account's first configured
 egress proxy. Refresh starts five minutes before expiry. The replaced access
-token remains valid for client membership only until the earlier of its expiry
-or ten minutes, and a compare-and-swap prevents refresh from overwriting a
-concurrent administrator rotation.
+token used by an already configured client remains its stable membership
+credential; only the upstream token changes. A compare-and-swap prevents the
+refresh from overwriting a concurrent administrator rotation. Set
+`oauth.refresh_mode = "external"` when another process owns the refresh-token
+family and synchronize its credential updates instead. Two refresh owners must
+never exchange copies of the same rotating refresh token.
 
 ## Bedrock release boundary
 

@@ -13,6 +13,8 @@ pub struct Config {
     #[serde(default)]
     pub forward_proxy: ForwardProxyConfig,
     pub auth: AuthConfig,
+    #[serde(default)]
+    pub oauth: OAuthConfig,
     pub storage: StorageConfig,
     pub admin: AdminConfig,
     #[serde(default)]
@@ -50,6 +52,21 @@ pub struct AuthConfig {
     pub mode: AuthMode,
     #[serde(skip)]
     pub mode_locked_by_environment: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OAuthConfig {
+    #[serde(default)]
+    pub refresh_mode: OAuthRefreshMode,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuthRefreshMode {
+    #[default]
+    Internal,
+    External,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

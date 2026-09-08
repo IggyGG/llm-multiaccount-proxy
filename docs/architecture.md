@@ -26,7 +26,8 @@ Proxy-aware client ─ CONNECT/TLS ──┘                    │
   adapts it into the data plane.
 - `storage` is the single-node SQLite implementation behind repository
   interfaces; credentials use XChaCha20-Poly1305 with per-account associated
-  data.
+  data. Client-membership and upstream credential ciphertexts have separate
+  lifecycles so provider refresh does not unexpectedly log clients out.
 - `admin` and `http_app` implement sessions, branded pages, CSRF-protected
   account operations, health, metrics, and actionable JSON errors.
 - `config` validates the file and environment override contract before startup.

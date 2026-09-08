@@ -19,6 +19,9 @@ data:
     [auth]
     mode = "observe"
 
+    [oauth]
+    refresh_mode = "internal"
+
     [storage]
     database_path = "/var/lib/llmap/llmap.db"
     master_key_env = "LLMAP_MASTER_KEY"

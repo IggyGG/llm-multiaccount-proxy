@@ -6,6 +6,12 @@ In enforce mode, confirm the client sends exactly one current token through
 Bearer or `x-api-key`, and that the owning account is active. Pause/remove takes
 effect immediately. Do not print the value while debugging.
 
+If OAuth works on the refresh owner but synchronized client tokens fail, check
+`oauth.refresh_mode` and the last successful credential-only sync. Two
+processes exchanging copies of one rotating refresh token will diverge; stop
+the incorrect owner and resynchronize from the selected owner. Never print
+tokens or place them in shell history while diagnosing this.
+
 ## `503 credential_store_unavailable`
 
 This is deliberately distinct from bad auth. Check database path permissions,

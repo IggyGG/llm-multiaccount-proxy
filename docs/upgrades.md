@@ -1,7 +1,11 @@
 # Upgrade and rollback
 
 Read release notes and back up state before every version change. Stable
-releases will document schema and configuration compatibility.
+releases will document schema and configuration compatibility. This upgrade
+adds and backfills the client-auth ciphertext column automatically by copying
+the already encrypted account credential; it does not decrypt or print it.
+Use the pre-upgrade database backup if an older binary cannot tolerate the
+migrated schema.
 
 1. Record the running image digest or binary version.
 2. Back up SQLite consistently and verify the master key is retrievable from

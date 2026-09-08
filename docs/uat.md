@@ -57,6 +57,10 @@ result, rotate one entry, and restore a backup.
 - searching the database, logs, audit export, and browser response finds no
   test provider token, refresh token, proxy username, or proxy password;
 - a second import skips existing IDs unless `--replace` is given;
+- `--credentials-only` changes the credential but preserves a locally paused
+  account, label, model map, and residential-proxy chain;
+- repeating the same credential sync is a no-op, while the prior credential
+  stops authenticating after its handover window;
 - the documented SQLite-plus-master-key restore returns the same redacted
   inventory and can serve a synthetic request.
 

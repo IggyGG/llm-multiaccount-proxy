@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use chrono::{Duration, TimeZone, Utc};
 use llmap::auth::{AccountCredential, AuthError, AuthMode, Authenticator, CredentialSnapshot};
-use llmap::config::Config;
+use llmap::config::{Config, OAuthRefreshMode};
 use llmap::egress::{DestinationPolicy, EgressError, ProxyChain, ProxyEndpoint};
 use llmap::routing::{
     RetryDecision, RouteAccount, RouteRequest, Router, UpstreamOutcome, retry_decision,
@@ -92,6 +92,8 @@ fn environment_auth_mode_is_validated_and_locks_the_ui_setting() {
         bind = "127.0.0.1:8080"
         [auth]
         mode = "observe"
+        [oauth]
+        refresh_mode = "external"
         [storage]
         database_path = "data/llmap.db"
         master_key_env = "LLMAP_MASTER_KEY"
@@ -104,6 +106,7 @@ fn environment_auth_mode_is_validated_and_locks_the_ui_setting() {
     let config = Config::from_toml_with_env(source, &environment).unwrap();
 
     assert_eq!(config.auth.mode, AuthMode::Enforce);
+    assert_eq!(config.oauth.refresh_mode, OAuthRefreshMode::External);
     assert!(config.auth.mode_locked_by_environment);
     config.validate().unwrap();
 }

@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
 
+use chrono::{TimeZone, Utc};
+use llmap::auth::{AuthMode, Authenticator};
+use llmap::data_plane::AccountRepository;
 use llmap::providers::{ProviderAccount, ProviderError, ProviderKind, prepare_request};
 use llmap::secrets::{AdminPasswordHash, SecretBox, SecretInput};
 use llmap::storage::{AuditEvent, SqliteStore};
@@ -193,6 +196,63 @@ fn opening_legacy_sqlite_encrypts_and_scrubs_plaintext_proxy_userinfo() {
             }
         }
     }
+}
+
+#[tokio::test]
+async fn upgrade_backfills_stable_client_auth_from_encrypted_credentials() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = directory.path().join("pre-client-auth.db");
+    let secret_box = SecretBox::new([94; 32]);
+    let credential = SecretInput::new("fake-pre-upgrade-token");
+    let encrypted = secret_box
+        .encrypt(&credential, b"account:account-01")
+        .unwrap();
+    let account_json = serde_json::to_string(&account(ProviderKind::AnthropicApiKey)).unwrap();
+    let legacy = rusqlite::Connection::open(&database).unwrap();
+    legacy
+        .execute_batch(
+            "CREATE TABLE provider_accounts (
+                id TEXT PRIMARY KEY,
+                account_json TEXT NOT NULL,
+                credential_ciphertext TEXT NOT NULL,
+                egress_ciphertext TEXT,
+                updated_at TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+    legacy
+        .execute(
+            "INSERT INTO provider_accounts VALUES (?1, ?2, ?3, NULL, ?4)",
+            rusqlite::params![
+                "account-01",
+                account_json,
+                encrypted.as_storage_value(),
+                "now"
+            ],
+        )
+        .unwrap();
+    drop(legacy);
+
+    let store = SqliteStore::open(&database, secret_box).unwrap();
+    let authenticator = Authenticator::new([95; 32]);
+    let snapshot = store
+        .credential_snapshot(
+            &authenticator,
+            Utc.with_ymd_and_hms(2031, 1, 1, 0, 0, 0).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(
+        authenticator
+            .authorize(
+                AuthMode::Enforce,
+                Some(credential.expose()),
+                &snapshot,
+                Utc.with_ymd_and_hms(2031, 1, 1, 0, 0, 0).unwrap(),
+            )
+            .unwrap()
+            .allowed
+    );
 }
 
 #[test]

@@ -1,9 +1,18 @@
 # Client authentication
 
 `llmap` deliberately reuses credentials clients already possess. A request is
-authenticated when its Bearer token or `x-api-key` exactly matches the current
-credential of any active configured account. Authentication grants access to
-the pool; it does not force routing through the matching account.
+authenticated when its Bearer token or `x-api-key` exactly matches the client
+authentication credential of any active configured account. Authentication
+grants access to the pool; it does not force routing through the matching
+account.
+
+The encrypted client credential and encrypted upstream credential begin with
+the same value but have separate lifecycles. An internal OAuth refresh changes
+only the upstream credential, so an already configured client is not logged out
+when `llmap` refreshes on its behalf. An explicit administrator rotation or an
+external credential sync changes both and retains the previous client token for
+at most ten minutes. Pausing or deleting the account still invalidates both the
+current and handover token immediately.
 
 Comparisons use keyed digests and constant-time equality. Unknown, missing, and
 expired tokens have the same external failure. Sending different Bearer and

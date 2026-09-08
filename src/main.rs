@@ -5,12 +5,14 @@ use std::sync::Arc;
 use clap::{Parser, Subcommand};
 use llmap::admin::{AdminSessionManager, SessionPolicy};
 use llmap::auth::Authenticator;
-use llmap::config::Config;
+use llmap::config::{Config, OAuthRefreshMode};
 use llmap::data_plane::{DataPlane, ReqwestTransport};
 use llmap::egress::DestinationPolicy;
 use llmap::forward_proxy::{ForwardProxyHandler, generate_ca, serve_forward_proxy};
 use llmap::http_app::{AdminRuntimeConfig, application_router};
-use llmap::migration::{import_claudeproxy_env, parse_claudeproxy_env};
+use llmap::migration::{
+    import_claudeproxy_env, parse_claudeproxy_env, sync_claudeproxy_credentials,
+};
 use llmap::routing::Router;
 use llmap::secrets::{AdminPasswordHash, SecretBox, SecretInput, parse_master_key};
 use llmap::storage::SqliteStore;
@@ -80,8 +82,11 @@ enum MigrateCommand {
         #[arg(long)]
         input: PathBuf,
         /// Replace deterministic claudeproxy-N account IDs that already exist.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "credentials_only")]
         replace: bool,
+        /// Update credentials only, preserving labels, enabled state, models, and egress policy.
+        #[arg(long, conflicts_with = "replace")]
+        credentials_only: bool,
     },
 }
 
@@ -134,8 +139,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     config,
                     input,
                     replace,
+                    credentials_only,
                 },
-        } => migrate_claudeproxy_env(&config, &input, replace),
+        } => migrate_claudeproxy_env(&config, &input, replace, credentials_only),
         Command::Backup {
             command: BackupCommand::Create { config, output },
         } => backup_database(&config, &output),
@@ -162,6 +168,7 @@ fn migrate_claudeproxy_env(
     config_path: &Path,
     input: &Path,
     replace: bool,
+    credentials_only: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let config = load_config(config_path)?;
     let encoded_master_key = Zeroizing::new(required_environment(&config.storage.master_key_env)?);
@@ -177,11 +184,23 @@ fn migrate_claudeproxy_env(
         Path::new(&config.storage.database_path),
         SecretBox::new(master_key),
     )?;
-    let summary = import_claudeproxy_env(&store, accounts, replace)?;
-    println!(
-        "imported {} account(s); skipped {} existing account(s)",
-        summary.imported, summary.skipped_existing
-    );
+    if credentials_only {
+        let summary = sync_claudeproxy_credentials(
+            &store,
+            accounts,
+            chrono::Utc::now() + chrono::Duration::minutes(10),
+        )?;
+        println!(
+            "synchronized {} account credential(s); {} unchanged",
+            summary.synced, summary.unchanged
+        );
+    } else {
+        let summary = import_claudeproxy_env(&store, accounts, replace)?;
+        println!(
+            "imported {} account(s); skipped {} existing account(s)",
+            summary.imported, summary.skipped_existing
+        );
+    }
     Ok(())
 }
 
@@ -232,27 +251,34 @@ async fn serve(config_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         session_key,
         SessionPolicy::default(),
     ));
-    let refresh_store = store.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        loop {
-            interval.tick().await;
-            let summary = refresh_store.refresh_due_oauth(chrono::Utc::now()).await;
-            if summary.refreshed > 0 {
-                info!(
-                    refreshed = summary.refreshed,
-                    "refreshed OAuth account credentials"
-                );
-            }
-            if summary.failed > 0 {
-                tracing::warn!(
-                    failed = summary.failed,
-                    "one or more OAuth credential refreshes failed"
-                );
-            }
+    match config.oauth.refresh_mode {
+        OAuthRefreshMode::Internal => {
+            let refresh_store = store.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                loop {
+                    interval.tick().await;
+                    let summary = refresh_store.refresh_due_oauth(chrono::Utc::now()).await;
+                    if summary.refreshed > 0 {
+                        info!(
+                            refreshed = summary.refreshed,
+                            "refreshed OAuth account credentials"
+                        );
+                    }
+                    if summary.failed > 0 {
+                        tracing::warn!(
+                            failed = summary.failed,
+                            "one or more OAuth credential refreshes failed"
+                        );
+                    }
+                }
+            });
         }
-    });
+        OAuthRefreshMode::External => {
+            info!("OAuth credential refresh is externally managed");
+        }
+    }
     let app = application_router(
         data_plane.clone(),
         store,
