@@ -20,7 +20,7 @@ spec:
       containers:
         - name: llmap
           # Replace with the immutable digest from the signed GitHub release.
-          image: ghcr.io/triformai/llm-multiaccount-proxy@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/iggygg/llm-multiaccount-proxy@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           args: ["serve", "--config", "/etc/llmap/llmap.toml"]
           ports:

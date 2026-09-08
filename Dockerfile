@@ -8,7 +8,7 @@ RUN LLMAP_BUILD_SHA="$VCS_REF" cargo build --release --locked
 FROM debian:bookworm-slim
 ARG VCS_REF=unknown
 ARG VERSION=development
-LABEL org.opencontainers.image.source="https://github.com/TriformAI/llm-multiaccount-proxy" \
+LABEL org.opencontainers.image.source="https://github.com/IggyGG/llm-multiaccount-proxy" \
       org.opencontainers.image.revision="$VCS_REF" \
       org.opencontainers.image.version="$VERSION" \
       org.opencontainers.image.licenses="Apache-2.0"

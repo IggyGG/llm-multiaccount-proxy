@@ -2,7 +2,7 @@
 set -euo pipefail
 
 forgejo_url="${LLMAP_FORGEJO_URL:-https://forgejo.triform.dev/triform/llm-multiaccount-proxy.git}"
-github_url="${LLMAP_GITHUB_URL:-https://github.com/TriformAI/llm-multiaccount-proxy.git}"
+github_url="${LLMAP_GITHUB_URL:-https://github.com/IggyGG/llm-multiaccount-proxy.git}"
 
 forgejo_main="$(git ls-remote "$forgejo_url" refs/heads/main | awk '{print $1}')"
 github_main="$(git ls-remote "$github_url" refs/heads/main | awk '{print $1}')"

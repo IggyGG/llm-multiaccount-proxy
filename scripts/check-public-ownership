@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly old_owner='github\.com/TriformAI/llm-multiaccount-proxy|ghcr\.io/triformai/llm-multiaccount-proxy'
+readonly new_repo='https://github.com/IggyGG/llm-multiaccount-proxy'
+readonly new_image='ghcr.io/iggygg/llm-multiaccount-proxy'
+readonly -a governed_paths=(
+  AGENTS.md
+  README.md
+  Cargo.toml
+  Dockerfile
+  schema/llmap.schema.json
+  .github/workflows/release.yml
+  examples/kubernetes/statefulset.yaml
+  examples/kubernetes/canary/base/statefulset.yaml
+  scripts/verify-mirror
+)
+
+if matches="$(git grep -nE "$old_owner" -- "${governed_paths[@]}" || true)" && [[ -n "$matches" ]]; then
+  printf 'public ownership check failed: old owner remains in governed surfaces:\n%s\n' "$matches" >&2
+  exit 1
+fi
+
+for path in README.md Cargo.toml Dockerfile schema/llmap.schema.json scripts/verify-mirror; do
+  git grep -qF "$new_repo" -- "$path" \
+    || { echo "public ownership check failed: $path lacks the canonical IggyGG repository URL" >&2; exit 1; }
+done
+for path in .github/workflows/release.yml examples/kubernetes/statefulset.yaml examples/kubernetes/canary/base/statefulset.yaml; do
+  git grep -qF "$new_image" -- "$path" \
+    || { echo "public ownership check failed: $path lacks the canonical IggyGG image path" >&2; exit 1; }
+done
+
+echo "public ownership check passed for IggyGG/llm-multiaccount-proxy"

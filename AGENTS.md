@@ -8,8 +8,9 @@ This repository is the standalone source for `llmap`.
   credentials, traffic logs, account data, or generated secrets into this repo.
 - Work on `agent/*` branches. Commit each meaningful step and open a pull
   request against Forgejo `main`; do not push directly to protected branches.
-- Forgejo is the integration authority. GitHub receives protected `main` and
-  signed tags through the configured push mirror.
+- `IggyGG/llm-multiaccount-proxy` is the canonical public home. Forgejo is
+  the protected integration authority and publishes only reviewed `main`
+  commits and signed tags to GitHub.
 - New behavior follows strict RED -> GREEN -> REFACTOR TDD unless an explicit,
   documented exception is approved.
 - Secret values are never logged, rendered, returned by APIs, or stored in
@@ -28,4 +29,3 @@ Describe the product as one endpoint for accounts the operator controls, with
 sticky sessions, capacity-aware routing, per-account egress, and operational
 visibility. Do not describe it as unlimited access, ban avoidance, or provider
 control circumvention.
-

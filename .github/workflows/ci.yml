@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify public ownership contract
+        run: ./scripts/check-public-ownership
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.88.0

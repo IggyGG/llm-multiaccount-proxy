@@ -67,11 +67,12 @@ their provider agreements and for the traffic sent through the proxy.
 
 ## Source and mirrors
 
-- Public home: <https://github.com/TriformAI/llm-multiaccount-proxy>
+- Public home: <https://github.com/IggyGG/llm-multiaccount-proxy>
 - Integration source: <https://forgejo.triform.dev/triform/llm-multiaccount-proxy>
 
-Forgejo is the integration authority. The protected `main` branch and signed
-version tags are mirrored to GitHub, where public releases are published.
+GitHub under `IggyGG` is the canonical public home. Forgejo is the protected
+integration authority; reviewed `main` commits and signed version tags are
+published to GitHub, where public releases are built.
 
 ## Documentation
 
