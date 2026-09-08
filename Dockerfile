@@ -5,7 +5,7 @@ WORKDIR /source
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends musl-tools \
+    && apt-get install -y --no-install-recommends binutils musl-tools \
     && rm -rf /var/lib/apt/lists/*
 RUN set -eux; \
     case "$TARGETARCH" in \
@@ -18,10 +18,15 @@ RUN set -eux; \
     CC_aarch64_unknown_linux_musl=musl-gcc \
     CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
     CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
+    RUSTFLAGS="-C target-feature=+crt-static -C link-arg=-static" \
     LLMAP_BUILD_SHA="$VCS_REF" \
       cargo build --release --locked --target "$rust_target"; \
     install -d -o 10001 -g 10001 /runtime/var/lib/llmap /runtime/etc/llmap; \
-    install -m 0755 "target/$rust_target/release/llmap" /runtime/llmap
+    install -m 0755 "target/$rust_target/release/llmap" /runtime/llmap; \
+    if readelf -l /runtime/llmap | grep -q ' INTERP '; then \
+      echo "dynamically linked executable is not allowed" >&2; \
+      exit 1; \
+    fi
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 ARG VCS_REF=unknown
