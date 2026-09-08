@@ -347,22 +347,11 @@ impl SqliteStore {
                 continue;
             }
             match refresh_oauth_candidate(&candidate).await {
-                Ok(refreshed) => {
-                    let previous_valid_until = candidate
-                        .envelope
-                        .expires_at
-                        .unwrap_or(now + chrono::Duration::minutes(10))
-                        .min(now + chrono::Duration::minutes(10));
-                    match self.replace_oauth_if_current(
-                        &candidate,
-                        &refreshed,
-                        previous_valid_until,
-                    ) {
-                        Ok(true) => summary.refreshed += 1,
-                        Ok(false) => summary.skipped += 1,
-                        Err(_) => summary.failed += 1,
-                    }
-                }
+                Ok(refreshed) => match self.replace_oauth_if_current(&candidate, &refreshed) {
+                    Ok(true) => summary.refreshed += 1,
+                    Ok(false) => summary.skipped += 1,
+                    Err(_) => summary.failed += 1,
+                },
                 Err(_) => summary.failed += 1,
             }
         }
@@ -426,7 +415,6 @@ impl SqliteStore {
         &self,
         candidate: &OAuthRefreshCandidate,
         refreshed: &OAuthCredentialEnvelope,
-        previous_valid_until: DateTime<Utc>,
     ) -> Result<bool, StorageError> {
         let plaintext = SecretInput::new(
             serde_json::to_string(refreshed)
@@ -453,18 +441,6 @@ impl SqliteStore {
             transaction.rollback()?;
             return Ok(false);
         }
-        transaction.execute(
-            "INSERT INTO credential_history (account_id, credential_ciphertext, expires_at)
-             VALUES (?1, ?2, ?3)
-             ON CONFLICT(account_id) DO UPDATE SET
-                 credential_ciphertext = excluded.credential_ciphertext,
-                 expires_at = excluded.expires_at",
-            rusqlite::params![
-                candidate.account.id,
-                candidate.expected_ciphertext,
-                previous_valid_until.to_rfc3339(),
-            ],
-        )?;
         transaction.commit()?;
         Ok(true)
     }
@@ -1137,7 +1113,14 @@ mod tests {
         store
             .upsert_account(
                 &oauth_account(),
+                &envelope("fake-previous-client-token", "2026-09-04T11:02:00Z"),
+            )
+            .unwrap();
+        store
+            .rotate_account_credential(
+                &oauth_account(),
                 &envelope("fake-stable-client-token", "2026-09-04T11:04:00Z"),
+                now + Duration::minutes(10),
             )
             .unwrap();
         let candidate = store.oauth_refresh_candidates(now).unwrap().remove(0);
@@ -1148,7 +1131,7 @@ mod tests {
 
         assert!(
             store
-                .replace_oauth_if_current(&candidate, &refreshed, now + Duration::minutes(10),)
+                .replace_oauth_if_current(&candidate, &refreshed)
                 .unwrap()
         );
         assert_eq!(
@@ -1169,12 +1152,32 @@ mod tests {
             authenticator
                 .authorize(
                     AuthMode::Enforce,
+                    Some("fake-previous-client-token"),
+                    &snapshot,
+                    now,
+                )
+                .unwrap()
+                .allowed
+        );
+        assert!(
+            authenticator
+                .authorize(
+                    AuthMode::Enforce,
                     Some("fake-stable-client-token"),
                     &snapshot,
                     now + Duration::hours(3),
                 )
                 .unwrap()
                 .allowed
+        );
+        assert_eq!(
+            authenticator.authorize(
+                AuthMode::Enforce,
+                Some("fake-previous-client-token"),
+                &snapshot,
+                now + Duration::minutes(11),
+            ),
+            Err(AuthError::Unauthorized)
         );
         assert_eq!(
             authenticator.authorize(
