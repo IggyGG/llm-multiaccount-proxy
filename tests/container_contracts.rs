@@ -23,6 +23,10 @@ fn container_binary_uses_rustc_static_musl_linkage_without_raw_static_override()
     assert!(DOCKERFILE.contains("--target \"$rust_target\""));
     assert!(DOCKERFILE.contains("-C target-feature=+crt-static"));
     assert!(
+        DOCKERFILE.contains("-C relocation-model=static"),
+        "rustc must disable PIE when producing the self-contained executable"
+    );
+    assert!(
         !DOCKERFILE.contains("link-arg=-static"),
         "a raw -static linker argument conflicts with rustc's static-PIE startup objects"
     );
