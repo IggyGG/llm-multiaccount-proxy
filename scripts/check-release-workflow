@@ -13,9 +13,12 @@ required = {
     "a terminal publish job": "\n  publish-release:\n    needs: [binaries, container]\n",
     "draft creation before uploads": 'gh release create "${GITHUB_REF_NAME}"',
     "publication after uploads": 'gh release edit "${GITHUB_REF_NAME}"',
+    "repository context for checkout-free jobs": "GH_REPO: ${{ github.repository }}",
 }
 
 missing = [name for name, fragment in required.items() if fragment not in workflow]
+if workflow.count("GH_REPO: ${{ github.repository }}") < 2:
+    missing.append("repository context on both checkout-free release jobs")
 if missing:
     print("release-workflow check failed:", file=sys.stderr)
     for name in missing:
