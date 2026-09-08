@@ -24,6 +24,9 @@ allowlist whenever possible.
 - Write-only credentials and proxy userinfo; metadata-only audit and metrics.
 - Non-overwriting CA creation and `0600` Unix private-key permissions.
 - No automatic replay after an upstream may have observed request bytes.
+- A non-root, shell-free distroless release image with the runtime base pinned
+  by digest; release CI publishes SBOM and provenance attestations and signs the
+  resulting multi-architecture manifest with keyless Cosign.
 
 ## Residual risks and GA gates
 

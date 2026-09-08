@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -87,6 +88,9 @@ enum MigrateCommand {
         /// Update credentials only, preserving labels, enabled state, models, and egress policy.
         #[arg(long, conflicts_with = "replace")]
         credentials_only: bool,
+        /// Repeat credential synchronization at this interval for an external refresh sidecar.
+        #[arg(long, requires = "credentials_only")]
+        watch_interval_seconds: Option<NonZeroU64>,
     },
 }
 
@@ -140,8 +144,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     input,
                     replace,
                     credentials_only,
+                    watch_interval_seconds,
                 },
-        } => migrate_claudeproxy_env(&config, &input, replace, credentials_only),
+        } => {
+            migrate_claudeproxy_env(
+                &config,
+                &input,
+                replace,
+                credentials_only,
+                watch_interval_seconds,
+            )
+            .await
+        }
         Command::Backup {
             command: BackupCommand::Create { config, output },
         } => backup_database(&config, &output),
@@ -164,11 +178,12 @@ fn backup_database(config_path: &Path, output: &Path) -> Result<(), Box<dyn std:
     Ok(())
 }
 
-fn migrate_claudeproxy_env(
+async fn migrate_claudeproxy_env(
     config_path: &Path,
     input: &Path,
     replace: bool,
     credentials_only: bool,
+    watch_interval_seconds: Option<NonZeroU64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let config = load_config(config_path)?;
     let encoded_master_key = Zeroizing::new(required_environment(&config.storage.master_key_env)?);
@@ -178,23 +193,31 @@ fn migrate_claudeproxy_env(
             std::fs::create_dir_all(parent)?;
         }
     }
-    let source = zeroize::Zeroizing::new(std::fs::read_to_string(input)?);
-    let accounts = parse_claudeproxy_env(&source)?;
     let store = SqliteStore::open(
         Path::new(&config.storage.database_path),
         SecretBox::new(master_key),
     )?;
     if credentials_only {
-        let summary = sync_claudeproxy_credentials(
-            &store,
-            accounts,
-            chrono::Utc::now() + chrono::Duration::minutes(10),
-        )?;
-        println!(
-            "synchronized {} account credential(s); {} unchanged",
-            summary.synced, summary.unchanged
-        );
+        loop {
+            let source = zeroize::Zeroizing::new(std::fs::read_to_string(input)?);
+            let accounts = parse_claudeproxy_env(&source)?;
+            let summary = sync_claudeproxy_credentials(
+                &store,
+                accounts,
+                chrono::Utc::now() + chrono::Duration::minutes(10),
+            )?;
+            println!(
+                "synchronized {} account credential(s); {} unchanged",
+                summary.synced, summary.unchanged
+            );
+            let Some(interval) = watch_interval_seconds else {
+                break;
+            };
+            tokio::time::sleep(std::time::Duration::from_secs(interval.get())).await;
+        }
     } else {
+        let source = zeroize::Zeroizing::new(std::fs::read_to_string(input)?);
+        let accounts = parse_claudeproxy_env(&source)?;
         let summary = import_claudeproxy_env(&store, accounts, replace)?;
         println!(
             "imported {} account(s); skipped {} existing account(s)",
@@ -363,5 +386,56 @@ fn initialize_logging() {
 async fn shutdown_signal() {
     if let Err(error) = tokio::signal::ctrl_c().await {
         error!(%error, "failed to install shutdown handler");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn credential_sync_accepts_a_nonzero_watch_interval() {
+        let cli = Cli::try_parse_from([
+            "llmap",
+            "migrate",
+            "claudeproxy-env",
+            "--input",
+            "/run/legacy-accounts/env-claude-accounts",
+            "--credentials-only",
+            "--watch-interval-seconds",
+            "300",
+        ])
+        .expect("watch mode should parse");
+
+        let Command::Migrate {
+            command:
+                MigrateCommand::ClaudeproxyEnv {
+                    watch_interval_seconds,
+                    ..
+                },
+        } = cli.command
+        else {
+            panic!("expected the Claudeproxy migration command");
+        };
+        assert_eq!(watch_interval_seconds.map(NonZeroU64::get), Some(300));
+    }
+
+    #[test]
+    fn credential_sync_rejects_a_zero_watch_interval() {
+        let result = Cli::try_parse_from([
+            "llmap",
+            "migrate",
+            "claudeproxy-env",
+            "--input",
+            "/run/legacy-accounts/env-claude-accounts",
+            "--credentials-only",
+            "--watch-interval-seconds",
+            "0",
+        ]);
+        let Err(error) = result else {
+            panic!("zero would create a busy loop");
+        };
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
     }
 }
