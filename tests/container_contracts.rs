@@ -20,4 +20,13 @@ fn container_binary_is_built_for_a_static_musl_target() {
     assert!(DOCKERFILE.contains("x86_64-unknown-linux-musl"));
     assert!(DOCKERFILE.contains("aarch64-unknown-linux-musl"));
     assert!(DOCKERFILE.contains("--target \"$rust_target\""));
+    assert!(DOCKERFILE.contains("-C link-arg=-static"));
+    assert!(
+        DOCKERFILE.contains("readelf -l /runtime/llmap"),
+        "the image build must inspect the produced executable"
+    );
+    assert!(
+        DOCKERFILE.contains("dynamically linked executable is not allowed"),
+        "the image build must fail if the executable retains an interpreter"
+    );
 }
