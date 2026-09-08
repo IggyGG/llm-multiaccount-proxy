@@ -49,7 +49,8 @@ paused state, model maps, or residential-proxy policy:
 llmap migrate claudeproxy-env \
   --config /etc/llmap/llmap.toml \
   --input /run/secrets/env-claude-accounts \
-  --credentials-only
+  --credentials-only \
+  --watch-interval-seconds 300
 ```
 
 Every deterministic account ID must already exist and its provider kind must
@@ -58,11 +59,17 @@ idempotent. A changed credential updates upstream use and client membership,
 retaining the prior client token for ten minutes on active accounts. It never
 enables an account.
 
-Run synchronization after the legacy owner writes a credential and at a
-bounded interval shorter than the remaining access-token lifetime. Use a
-read-only secret channel; never place the env file in an image, ConfigMap,
-repository, log, or command-line value. Before switching back to `internal`,
-complete one final sync and stop the legacy owner.
+Watch mode performs one synchronization immediately, then rereads the file at
+the requested nonzero interval. This native loop is suitable for a sidecar in
+the shell-free release image. Any read, parse, preflight, or database failure
+terminates the process so the orchestrator can expose and restart the failed
+sidecar; it does not continue with a partially synchronized account set.
+
+Run synchronization after the legacy owner writes a credential and at an
+interval shorter than the remaining access-token lifetime. Use a read-only
+secret channel; never place the env file in an image, ConfigMap, repository,
+log, or command-line value. Before switching back to `internal`, complete one
+final sync and stop the legacy owner.
 
 ## 3. Shadow configuration
 
