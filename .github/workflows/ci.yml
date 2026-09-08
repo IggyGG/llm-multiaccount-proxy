@@ -16,6 +16,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify public ownership contract
         run: ./scripts/check-public-ownership
+      - name: Verify release job ordering
+        run: ./scripts/check-release-workflow
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.88.0
