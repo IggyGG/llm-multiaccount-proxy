@@ -18,6 +18,10 @@ jobs:
         with:
           toolchain: 1.88.0
           components: rustfmt, clippy
+      - name: Verify the tag matches the packaged binary version
+        run: |
+          package_version=$(cargo metadata --locked --no-deps --format-version 1 | jq -r '.packages[0].version')
+          test "v${package_version}" = "${GITHUB_REF_NAME}"
       - run: cargo fmt --all -- --check
       - run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - run: cargo test --locked --all-features

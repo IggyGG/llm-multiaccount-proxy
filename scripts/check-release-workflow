@@ -14,6 +14,7 @@ required = {
     "draft creation before uploads": 'gh release create "${GITHUB_REF_NAME}"',
     "publication after uploads": 'gh release edit "${GITHUB_REF_NAME}"',
     "repository context for checkout-free jobs": "GH_REPO: ${{ github.repository }}",
+    "tag and package version equality": 'test "v${package_version}" = "${GITHUB_REF_NAME}"',
 }
 
 missing = [name for name, fragment in required.items() if fragment not in workflow]
