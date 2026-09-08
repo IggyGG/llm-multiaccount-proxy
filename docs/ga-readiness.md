@@ -33,7 +33,7 @@ not end-to-end proof.
   denial, strict headers, bounded bodies, and login lockout.
 - [ ] Independent threat-model review and penetration test closed without an
   unresolved critical/high finding.
-- [ ] Secret scan, dependency audit, license policy, CodeQL, container scan,
+- [x] Secret scan, dependency audit, license policy, CodeQL, container scan,
   SBOM, provenance, and signed release artifacts green on the release commit.
 
 ## Operations
@@ -63,6 +63,30 @@ not end-to-end proof.
 - [ ] Reproducible container and multi-platform binaries published from an
   immutable annotated tag with checksums, SBOM, provenance, and a signed OCI
   image digest.
+
+## Current release-candidate evidence
+
+`v0.1.0-rc.9` is built from source commit
+`8bd9d2a785f633289e4e79f9f02359875e520202`. Its published multi-platform
+image is
+`ghcr.io/iggygg/llm-multiaccount-proxy@sha256:c68f8e5b486fd850e99497674f9e5f3d3b492477cc252fd5bd86ef8721b1d6ed`.
+
+- [Source CI](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34271369581),
+  [security policy](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34271369543),
+  and [CodeQL](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34271369628)
+  are green on the release commit.
+- The [release workflow](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34272008266)
+  published five checksum-verified binaries plus a signed linux/amd64 and
+  linux/arm64 image with per-platform SPDX and SLSA attestations.
+- Both published container binaries are statically linked and contain no ELF
+  `PT_INTERP` program header. Docker Scout reports no critical or high
+  vulnerabilities for either architecture.
+- The image is anonymously pullable, runs as `10001:10001`, and carries the
+  exact source and version labels above.
+
+These artifacts close the automated release-security bundle only. Independent
+penetration testing, a live restore drill, load/soak qualification, live canary
+evidence, 30 clean days, and reproducible-build comparison remain open.
 
 Release owners attach CI URLs, tag object ID, signed image digest, scan reports,
 UAT records, canary dashboards, restore record, rollback record, and soak dates
