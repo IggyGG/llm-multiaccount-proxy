@@ -37,7 +37,7 @@ spec:
         - name: llmap
           # Replace this placeholder through a reviewed overlay with the exact
           # digest produced for the release candidate. A tag is not sufficient.
-          image: ghcr.io/triformai/llm-multiaccount-proxy@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/iggygg/llm-multiaccount-proxy@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           args: ["serve", "--config", "/etc/llmap/llmap.toml"]
           ports:

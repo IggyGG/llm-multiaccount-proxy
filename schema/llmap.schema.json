@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/TriformAI/llm-multiaccount-proxy/schema/llmap.schema.json",
+  "$id": "https://github.com/IggyGG/llm-multiaccount-proxy/schema/llmap.schema.json",
   "title": "LLM Multiaccount Proxy configuration",
   "type": "object",
   "additionalProperties": false,
