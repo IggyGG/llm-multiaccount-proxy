@@ -19,7 +19,7 @@ fi
 forgejo_tags="$(git ls-remote --tags "$forgejo_url" | sed 's/\^{}$//' | sort -u)"
 github_tags="$(git ls-remote --tags "$github_url" | sed 's/\^{}$//' | sort -u)"
 if [[ "$forgejo_tags" != "$github_tags" ]]; then
-  echo "mirror verification failed: signed tag refs differ" >&2
+  echo "mirror verification failed: release tag refs differ" >&2
   exit 1
 fi
 

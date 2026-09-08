@@ -71,8 +71,9 @@ their provider agreements and for the traffic sent through the proxy.
 - Integration source: <https://forgejo.triform.dev/triform/llm-multiaccount-proxy>
 
 GitHub under `IggyGG` is the canonical public home. Forgejo is the protected
-integration authority; reviewed `main` commits and signed version tags are
-published to GitHub, where public releases are built.
+integration authority; reviewed `main` commits and annotated release tags are
+published to GitHub, where public releases build checksummed binaries and a
+keyless-Cosign-signed OCI image with SBOM and provenance.
 
 ## Documentation
 

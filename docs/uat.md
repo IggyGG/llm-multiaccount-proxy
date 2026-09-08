@@ -90,7 +90,8 @@ rollback rehearsal have linked evidence.
 
 - 30 consecutive days contain no severity-1/2 security or data-plane
   regression;
-- mirror refs, signed tag, checksums, SBOM, provenance, image digest, and
+- mirror refs, annotated tag object, checksums, SBOM, provenance, signed image
+  digest, and
   release notes all identify the same source commit;
 - any missing item leaves the GA checklist open and the Python service in
   place.

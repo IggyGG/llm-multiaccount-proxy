@@ -59,12 +59,13 @@ not end-to-end proof.
 - [x] Forgejo-to-GitHub push mirror configured for branches and tags.
 - [x] Forgejo and GitHub protected branches require review and CI; the
   scheduled mirror parity monitor is green.
-- [ ] Reproducible container and multi-platform binaries published from a
-  signed tag with checksums, SBOM, and provenance.
+- [ ] Reproducible container and multi-platform binaries published from an
+  immutable annotated tag with checksums, SBOM, provenance, and a signed OCI
+  image digest.
 
-Release owners attach CI URLs, image digests, signed tag, scan reports, UAT
-records, canary dashboards, restore record, rollback record, and soak dates to
-the release issue.
+Release owners attach CI URLs, tag object ID, signed image digest, scan reports,
+UAT records, canary dashboards, restore record, rollback record, and soak dates
+to the release issue.
 
 Automated scope and explicit live boundaries are mapped in
 [RC1 evidence](rc1-evidence.md). The synthetic checks do not close the restore,
