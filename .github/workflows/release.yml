@@ -22,8 +22,29 @@ jobs:
       - run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - run: cargo test --locked --all-features
 
-  binaries:
+  release-draft:
     needs: quality
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Create the draft before parallel artifact uploads
+        env:
+          IS_PRERELEASE: ${{ contains(github.ref_name, '-') }}
+        run: |
+          set -euo pipefail
+          args=(--verify-tag --draft --title "${GITHUB_REF_NAME}" --generate-notes)
+          if [[ "${IS_PRERELEASE}" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "release ${GITHUB_REF_NAME} already exists; reusing it"
+          else
+            gh release create "${GITHUB_REF_NAME}" "${args[@]}"
+          fi
+
+  binaries:
+    needs: release-draft
     env:
       LLMAP_BUILD_SHA: ${{ github.sha }}
     strategy:
@@ -45,7 +66,7 @@ jobs:
           checksum: sha256
 
   container:
-    needs: quality
+    needs: release-draft
     runs-on: ubuntu-latest
     outputs:
       digest: ${{ steps.build.outputs.digest }}
@@ -90,4 +111,24 @@ jobs:
           output-file: llmap-container.spdx.json
       - uses: softprops/action-gh-release@v2
         with:
+          draft: true
           files: llmap-container.spdx.json
+
+  publish-release:
+    needs: [binaries, container]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Publish only after every binary and the signed image succeed
+        env:
+          IS_PRERELEASE: ${{ contains(github.ref_name, '-') }}
+        run: |
+          set -euo pipefail
+          args=(--draft=false)
+          if [[ "${IS_PRERELEASE}" == "true" ]]; then
+            args+=(--prerelease)
+          else
+            args+=(--latest)
+          fi
+          gh release edit "${GITHUB_REF_NAME}" "${args[@]}"
