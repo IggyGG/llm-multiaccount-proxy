@@ -10,7 +10,8 @@ This repository is the standalone source for `llmap`.
   request against Forgejo `main`; do not push directly to protected branches.
 - `IggyGG/llm-multiaccount-proxy` is the canonical public home. Forgejo is
   the protected integration authority and publishes only reviewed `main`
-  commits and signed tags to GitHub.
+  commits and annotated release tags to GitHub. Release OCI images are signed
+  separately with keyless Cosign.
 - New behavior follows strict RED -> GREEN -> REFACTOR TDD unless an explicit,
   documented exception is approved.
 - Secret values are never logged, rendered, returned by APIs, or stored in
