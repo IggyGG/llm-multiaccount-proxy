@@ -104,6 +104,14 @@ jobs:
             VERSION=${{ github.ref_name }}
           provenance: mode=max
           sbom: true
+      - name: Execute published images on both architectures
+        env:
+          IMAGE: ghcr.io/iggygg/llm-multiaccount-proxy
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker run --rm --platform linux/amd64 "${IMAGE}@${DIGEST}" --version
+          docker run --rm --platform linux/arm64 "${IMAGE}@${DIGEST}" --version
       - uses: sigstore/cosign-installer@v4.1.2
       - env:
           IMAGE: ghcr.io/iggygg/llm-multiaccount-proxy
