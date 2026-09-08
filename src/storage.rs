@@ -89,6 +89,7 @@ impl SqliteStore {
                  id TEXT PRIMARY KEY,
                  account_json TEXT NOT NULL,
                  credential_ciphertext TEXT NOT NULL,
+                 client_auth_ciphertext TEXT NOT NULL,
                  egress_ciphertext TEXT,
                  updated_at TEXT NOT NULL
              );
@@ -138,6 +139,31 @@ impl SqliteStore {
              VALUES (4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
             [],
         )?;
+        let has_client_auth_ciphertext = {
+            let mut statement = connection.prepare("PRAGMA table_info(provider_accounts)")?;
+            let columns = statement.query_map([], |row| row.get::<_, String>(1))?;
+            columns
+                .collect::<Result<Vec<_>, _>>()?
+                .iter()
+                .any(|column| column == "client_auth_ciphertext")
+        };
+        if !has_client_auth_ciphertext {
+            connection.execute(
+                "ALTER TABLE provider_accounts ADD COLUMN client_auth_ciphertext TEXT",
+                [],
+            )?;
+        }
+        connection.execute(
+            "UPDATE provider_accounts
+             SET client_auth_ciphertext = credential_ciphertext
+             WHERE client_auth_ciphertext IS NULL",
+            [],
+        )?;
+        connection.execute(
+            "INSERT OR IGNORE INTO schema_migrations(version, applied_at)
+             VALUES (5, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+            [],
+        )?;
         let store = Self {
             connection: Mutex::new(connection),
             secret_box,
@@ -166,11 +192,13 @@ impl SqliteStore {
         let transaction = connection.transaction()?;
         transaction.execute(
             "INSERT INTO provider_accounts (
-                 id, account_json, credential_ciphertext, egress_ciphertext, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                 id, account_json, credential_ciphertext, client_auth_ciphertext,
+                 egress_ciphertext, updated_at
+             ) VALUES (?1, ?2, ?3, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
              ON CONFLICT(id) DO UPDATE SET
                  account_json = excluded.account_json,
                  credential_ciphertext = excluded.credential_ciphertext,
+                 client_auth_ciphertext = excluded.client_auth_ciphertext,
                  egress_ciphertext = excluded.egress_ciphertext,
                  updated_at = excluded.updated_at",
             rusqlite::params![
@@ -202,7 +230,7 @@ impl SqliteStore {
         let mut connection = self.connection.lock();
         let transaction = connection.transaction()?;
         let previous = transaction.query_row(
-            "SELECT credential_ciphertext FROM provider_accounts WHERE id = ?1",
+            "SELECT client_auth_ciphertext FROM provider_accounts WHERE id = ?1",
             [&account.id],
             |row| row.get::<_, String>(0),
         );
@@ -222,11 +250,13 @@ impl SqliteStore {
         }
         transaction.execute(
             "INSERT INTO provider_accounts (
-                 id, account_json, credential_ciphertext, egress_ciphertext, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                 id, account_json, credential_ciphertext, client_auth_ciphertext,
+                 egress_ciphertext, updated_at
+             ) VALUES (?1, ?2, ?3, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
              ON CONFLICT(id) DO UPDATE SET
                  account_json = excluded.account_json,
                  credential_ciphertext = excluded.credential_ciphertext,
+                 client_auth_ciphertext = excluded.client_auth_ciphertext,
                  egress_ciphertext = excluded.egress_ciphertext,
                  updated_at = excluded.updated_at",
             rusqlite::params![
@@ -238,6 +268,66 @@ impl SqliteStore {
         )?;
         transaction.commit()?;
         Ok(())
+    }
+
+    pub fn sync_account_credential(
+        &self,
+        account_id: &str,
+        credential: &SecretInput,
+        previous_valid_until: DateTime<Utc>,
+    ) -> Result<bool, StorageError> {
+        let associated_data = format!("account:{account_id}");
+        let mut connection = self.connection.lock();
+        let transaction = connection.transaction()?;
+        let (provider_ciphertext, auth_ciphertext) = match transaction.query_row(
+            "SELECT credential_ciphertext, client_auth_ciphertext
+             FROM provider_accounts WHERE id = ?1",
+            [account_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        ) {
+            Ok(value) => value,
+            Err(rusqlite::Error::QueryReturnedNoRows) => return Err(StorageError::NotFound),
+            Err(error) => return Err(StorageError::Database(error)),
+        };
+        let provider_plaintext = self.secret_box.decrypt(
+            &crate::secrets::EncryptedSecret::from_storage_value(provider_ciphertext),
+            associated_data.as_bytes(),
+        )?;
+        let auth_plaintext = self.secret_box.decrypt(
+            &crate::secrets::EncryptedSecret::from_storage_value(auth_ciphertext.clone()),
+            associated_data.as_bytes(),
+        )?;
+        if provider_plaintext.as_str() == credential.expose()
+            && auth_plaintext.as_str() == credential.expose()
+        {
+            transaction.rollback()?;
+            return Ok(false);
+        }
+        let encrypted = self
+            .secret_box
+            .encrypt(credential, associated_data.as_bytes())?;
+        transaction.execute(
+            "INSERT INTO credential_history (account_id, credential_ciphertext, expires_at)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(account_id) DO UPDATE SET
+                 credential_ciphertext = excluded.credential_ciphertext,
+                 expires_at = excluded.expires_at",
+            rusqlite::params![
+                account_id,
+                auth_ciphertext,
+                previous_valid_until.to_rfc3339()
+            ],
+        )?;
+        transaction.execute(
+            "UPDATE provider_accounts
+             SET credential_ciphertext = ?2,
+                 client_auth_ciphertext = ?2,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE id = ?1",
+            rusqlite::params![account_id, encrypted.as_storage_value()],
+        )?;
+        transaction.commit()?;
+        Ok(true)
     }
 
     pub async fn refresh_due_oauth(&self, now: DateTime<Utc>) -> OAuthRefreshSummary {
@@ -733,7 +823,7 @@ impl AccountRepository for SqliteStore {
             let connection = self.connection.lock();
             let mut statement = connection
                 .prepare(
-                    "SELECT p.account_json, p.credential_ciphertext,
+                    "SELECT p.account_json, p.client_auth_ciphertext,
                             h.credential_ciphertext, h.expires_at
                      FROM provider_accounts p
                      LEFT JOIN credential_history h ON h.account_id = p.id
@@ -767,12 +857,10 @@ impl AccountRepository for SqliteStore {
                     associated_data.as_bytes(),
                 )
                 .map_err(|_| RepositoryError::InvalidData)?;
-            let (current_token, current_expiry) =
-                decoded_credential(&account.kind, secret.as_str())
-                    .map_err(|_| RepositoryError::InvalidData)?;
+            let (current_token, _) = decoded_credential(&account.kind, secret.as_str())
+                .map_err(|_| RepositoryError::InvalidData)?;
             let mut credential =
-                AccountCredential::active(authenticator, &account.id, &current_token)
-                    .with_current_expiry(current_expiry);
+                AccountCredential::active(authenticator, &account.id, &current_token);
             if let (Some(previous_ciphertext), Some(previous_expires_at)) =
                 (previous_ciphertext, previous_expires_at)
             {
@@ -977,7 +1065,33 @@ fn decoded_credential(
 
 #[cfg(test)]
 mod tests {
-    use super::oauth_endpoint_allowed;
+    use chrono::{Duration, TimeZone, Utc};
+
+    use super::{OAuthCredentialEnvelope, oauth_endpoint_allowed};
+    use crate::auth::{AuthError, AuthMode, Authenticator};
+    use crate::data_plane::AccountRepository;
+    use crate::providers::{ProviderAccount, ProviderKind};
+    use crate::secrets::{SecretBox, SecretInput};
+
+    fn oauth_account() -> ProviderAccount {
+        ProviderAccount {
+            id: "oauth-refresh-owner".into(),
+            label: "OAuth refresh owner".into(),
+            kind: ProviderKind::ClaudeOauth,
+            base_url: url::Url::parse("https://api.anthropic.com/").unwrap(),
+            enabled: true,
+            model_map: Default::default(),
+            egress_proxies: Vec::new(),
+            compatible_auth_header: None,
+            compatible_auth_prefix: None,
+        }
+    }
+
+    fn envelope(access_token: &str, expires_at: &str) -> SecretInput {
+        SecretInput::new(format!(
+            r#"{{"access_token":"{access_token}","refresh_token":"fake-refresh","expires_at":"{expires_at}","token_endpoint":"https://platform.claude.com/v1/oauth/token","client_id":"fake-client"}}"#
+        ))
+    }
 
     #[test]
     fn oauth_refresh_hosts_cover_supported_claude_endpoints_only() {
@@ -1011,5 +1125,65 @@ mod tests {
         assert_eq!(value["grant_type"], "refresh_token");
         assert_eq!(value["refresh_token"], "fake-refresh");
         assert!(value.get("client_secret").is_none());
+    }
+
+    #[tokio::test]
+    async fn provider_refresh_does_not_rotate_the_stable_client_auth_credential() {
+        let directory = tempfile::tempdir().unwrap();
+        let store =
+            super::SqliteStore::open(&directory.path().join("llmap.db"), SecretBox::new([92; 32]))
+                .unwrap();
+        let now = Utc.with_ymd_and_hms(2026, 9, 4, 11, 0, 0).unwrap();
+        store
+            .upsert_account(
+                &oauth_account(),
+                &envelope("fake-stable-client-token", "2026-09-04T11:04:00Z"),
+            )
+            .unwrap();
+        let candidate = store.oauth_refresh_candidates(now).unwrap().remove(0);
+        let refreshed: OAuthCredentialEnvelope = serde_json::from_str(
+            envelope("fake-refreshed-provider-token", "2026-09-04T13:00:00Z").expose(),
+        )
+        .unwrap();
+
+        assert!(
+            store
+                .replace_oauth_if_current(&candidate, &refreshed, now + Duration::minutes(10),)
+                .unwrap()
+        );
+        assert_eq!(
+            store
+                .load_account("oauth-refresh-owner")
+                .unwrap()
+                .1
+                .expose(),
+            "fake-refreshed-provider-token"
+        );
+
+        let authenticator = Authenticator::new([93; 32]);
+        let snapshot = store
+            .credential_snapshot(&authenticator, now)
+            .await
+            .unwrap();
+        assert!(
+            authenticator
+                .authorize(
+                    AuthMode::Enforce,
+                    Some("fake-stable-client-token"),
+                    &snapshot,
+                    now + Duration::hours(3),
+                )
+                .unwrap()
+                .allowed
+        );
+        assert_eq!(
+            authenticator.authorize(
+                AuthMode::Enforce,
+                Some("fake-refreshed-provider-token"),
+                &snapshot,
+                now,
+            ),
+            Err(AuthError::Unauthorized)
+        );
     }
 }

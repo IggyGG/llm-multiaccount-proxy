@@ -21,6 +21,11 @@ allowed_hosts = [
 # belonging to any active configured account.
 mode = "observe"
 
+[oauth]
+# internal: llmap owns refresh; external: credentials are synchronized by one
+# external owner with `migrate claudeproxy-env --credentials-only`.
+refresh_mode = "internal"
+
 [storage]
 database_path = "state/llmap.db"
 master_key_env = "LLMAP_MASTER_KEY"

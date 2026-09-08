@@ -1,4 +1,9 @@
-use llmap::migration::{import_claudeproxy_env, parse_claudeproxy_env};
+use chrono::{Duration, TimeZone, Utc};
+use llmap::auth::{AuthError, AuthMode, Authenticator};
+use llmap::data_plane::AccountRepository;
+use llmap::migration::{
+    MigrationError, import_claudeproxy_env, parse_claudeproxy_env, sync_claudeproxy_credentials,
+};
 use llmap::providers::ProviderKind;
 use llmap::secrets::{SecretBox, parse_master_key};
 use llmap::storage::SqliteStore;
@@ -66,4 +71,107 @@ fn import_is_encrypted_idempotent_and_replace_is_explicit() {
                 .any(|window| window == secret.as_bytes())
         );
     }
+}
+
+#[tokio::test]
+async fn credential_sync_preserves_local_account_policy_and_rotates_client_auth() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = directory.path().join("llmap.db");
+    let key = parse_master_key("ERERERERERERERERERERERERERERERERERERERERERE=").unwrap();
+    let store = SqliteStore::open(&database, SecretBox::new(key)).unwrap();
+
+    import_claudeproxy_env(&store, parse_claudeproxy_env(LEGACY).unwrap(), false).unwrap();
+    let (mut locally_managed, _) = store.load_account("claudeproxy-1").unwrap();
+    locally_managed.label = "Locally managed label".into();
+    locally_managed.egress_proxies =
+        vec!["socks5h://local-user:local-pass@residential.invalid:1080".into()];
+    let original = parse_claudeproxy_env(LEGACY).unwrap().remove(0);
+    store
+        .upsert_account(&locally_managed, &original.credential)
+        .unwrap();
+
+    let updated_source = LEGACY
+        .replace("OAuth primary", "Legacy renamed label")
+        .replace("fake-oauth-access", "fake-synced-oauth-access");
+    let rotation_time = Utc.with_ymd_and_hms(2026, 9, 4, 11, 0, 0).unwrap();
+    let summary = sync_claudeproxy_credentials(
+        &store,
+        parse_claudeproxy_env(&updated_source).unwrap(),
+        rotation_time + Duration::minutes(10),
+    )
+    .unwrap();
+
+    assert_eq!(summary.synced, 1);
+    assert_eq!(summary.unchanged, 2);
+    let idempotent = sync_claudeproxy_credentials(
+        &store,
+        parse_claudeproxy_env(&updated_source).unwrap(),
+        rotation_time + Duration::minutes(15),
+    )
+    .unwrap();
+    assert_eq!(idempotent.synced, 0);
+    assert_eq!(idempotent.unchanged, 3);
+    let (synced, provider_credential) = store.load_account("claudeproxy-1").unwrap();
+    assert_eq!(synced.label, "Locally managed label");
+    assert_eq!(synced.egress_proxies, locally_managed.egress_proxies);
+    assert!(synced.enabled);
+    assert_eq!(provider_credential.expose(), "fake-synced-oauth-access");
+    assert!(!store.load_account("claudeproxy-2").unwrap().0.enabled);
+
+    let authenticator = Authenticator::new([91; 32]);
+    let snapshot = store
+        .credential_snapshot(&authenticator, rotation_time)
+        .await
+        .unwrap();
+    for token in ["fake-oauth-access", "fake-synced-oauth-access"] {
+        assert!(
+            authenticator
+                .authorize(AuthMode::Enforce, Some(token), &snapshot, rotation_time)
+                .unwrap()
+                .allowed
+        );
+    }
+    assert_eq!(
+        authenticator.authorize(
+            AuthMode::Enforce,
+            Some("fake-oauth-access"),
+            &snapshot,
+            rotation_time + Duration::minutes(11),
+        ),
+        Err(AuthError::Unauthorized)
+    );
+    assert!(
+        authenticator
+            .authorize(
+                AuthMode::Enforce,
+                Some("fake-synced-oauth-access"),
+                &snapshot,
+                Utc.with_ymd_and_hms(2031, 1, 1, 0, 0, 0).unwrap(),
+            )
+            .unwrap()
+            .allowed
+    );
+}
+
+#[test]
+fn credential_sync_preflights_all_accounts_before_writing() {
+    let directory = tempfile::tempdir().unwrap();
+    let key = parse_master_key("ERERERERERERERERERERERERERERERERERERERERERE=").unwrap();
+    let store = SqliteStore::open(&directory.path().join("llmap.db"), SecretBox::new(key)).unwrap();
+    import_claudeproxy_env(&store, parse_claudeproxy_env(LEGACY).unwrap(), false).unwrap();
+    store.delete_account("claudeproxy-3").unwrap();
+    let updated_source = LEGACY.replace("fake-oauth-access", "fake-must-not-be-written");
+
+    let error = sync_claudeproxy_credentials(
+        &store,
+        parse_claudeproxy_env(&updated_source).unwrap(),
+        Utc.with_ymd_and_hms(2026, 9, 4, 11, 10, 0).unwrap(),
+    )
+    .unwrap_err();
+
+    assert!(matches!(error, MigrationError::MissingSyncAccount(id) if id == "claudeproxy-3"));
+    assert_eq!(
+        store.load_account("claudeproxy-1").unwrap().1.expose(),
+        "fake-oauth-access"
+    );
 }

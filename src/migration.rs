@@ -24,6 +24,12 @@ pub struct ImportSummary {
     pub skipped_existing: usize,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CredentialSyncSummary {
+    pub synced: usize,
+    pub unchanged: usize,
+}
+
 #[derive(Debug, Error)]
 pub enum MigrationError {
     #[error("legacy account variable {0} is defined more than once")]
@@ -36,6 +42,10 @@ pub enum MigrationError {
     InvalidProvider(u16, String),
     #[error("legacy account file contains no CLAUDE_ACCOUNT_N entries")]
     Empty,
+    #[error("credential-only sync requires existing account {0}")]
+    MissingSyncAccount(String),
+    #[error("credential-only sync cannot change the provider kind for account {0}")]
+    ProviderKindMismatch(String),
     #[error(transparent)]
     Storage(#[from] StorageError),
 }
@@ -190,6 +200,43 @@ pub fn import_claudeproxy_env(
         }
         store.upsert_account(&imported.account, &imported.credential)?;
         summary.imported += 1;
+    }
+    Ok(summary)
+}
+
+pub fn sync_claudeproxy_credentials(
+    store: &SqliteStore,
+    accounts: Vec<ImportedAccount>,
+    previous_valid_until: DateTime<Utc>,
+) -> Result<CredentialSyncSummary, MigrationError> {
+    for imported in &accounts {
+        let existing = match store.load_account(&imported.account.id) {
+            Ok((account, _)) => account,
+            Err(StorageError::NotFound) => {
+                return Err(MigrationError::MissingSyncAccount(
+                    imported.account.id.clone(),
+                ));
+            }
+            Err(error) => return Err(MigrationError::Storage(error)),
+        };
+        if existing.kind != imported.account.kind {
+            return Err(MigrationError::ProviderKindMismatch(
+                imported.account.id.clone(),
+            ));
+        }
+    }
+
+    let mut summary = CredentialSyncSummary::default();
+    for imported in accounts {
+        if store.sync_account_credential(
+            &imported.account.id,
+            &imported.credential,
+            previous_valid_until,
+        )? {
+            summary.synced += 1;
+        } else {
+            summary.unchanged += 1;
+        }
     }
     Ok(summary)
 }

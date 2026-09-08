@@ -20,6 +20,15 @@ Provider base URLs must be HTTPS and contain no userinfo.
 `mode` is `off`, `observe`, or `enforce`. `LLMAP_AUTH_MODE` overrides the file
 and makes the control-plane display read-only. See [authentication](authentication.md).
 
+## `[oauth]`
+
+`refresh_mode` is `internal` (the default) or `external`. Internal mode makes
+`llmap` the only process that exchanges stored OAuth refresh tokens. External
+mode disables that loop; use it while another service owns refresh and
+synchronize its encrypted credential file with the documented
+`migrate claudeproxy-env --credentials-only` command. Never run both refresh
+owners against copies of the same rotating refresh token.
+
 ## `[storage]`
 
 `database_path` points to the SQLite database. `master_key_env` names an

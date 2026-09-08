@@ -16,8 +16,9 @@ not end-to-end proof.
   fallback.
 - [x] Branded session/CSRF administrator control plane and immediate
   pause/delete effect.
-- [x] Automatic Claude OAuth refresh with bounded previous-token overlap and
-  compare-and-swap persistence.
+- [x] Single-owner Claude OAuth refresh with stable client membership,
+  compare-and-swap persistence, idempotent external synchronization, and
+  bounded client-token handover on explicit rotation.
 - [x] Native Bedrock SigV4 vectors and Anthropic-to-Bedrock streaming parity,
   including a published AWS signing vector and Smithy EventStream semantics.
 - [x] Upstream DNS resolution validation and address pinning before direct

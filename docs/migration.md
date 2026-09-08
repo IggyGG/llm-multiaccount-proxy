@@ -36,7 +36,35 @@ using `--replace`; replacement rotates both provider and proxy credentials and
 is intentionally explicit. Keep the source file outside the repository and
 delete or archive it only through your normal secret-handling procedure.
 
-## 2. Shadow configuration
+## 2. Coexist with one refresh owner
+
+OAuth refresh tokens commonly rotate when exchanged. During a canary, choose
+exactly one owner for each token family. If legacy Claudeproxy continues to
+refresh accounts, set `oauth.refresh_mode = "external"`.
+
+Synchronize its latest env file without changing local labels, enabled or
+paused state, model maps, or residential-proxy policy:
+
+```bash
+llmap migrate claudeproxy-env \
+  --config /etc/llmap/llmap.toml \
+  --input /run/secrets/env-claude-accounts \
+  --credentials-only
+```
+
+Every deterministic account ID must already exist and its provider kind must
+match. The command preflights the complete input, reports counts only, and is
+idempotent. A changed credential updates upstream use and client membership,
+retaining the prior client token for ten minutes on active accounts. It never
+enables an account.
+
+Run synchronization after the legacy owner writes a credential and at a
+bounded interval shorter than the remaining access-token lifetime. Use a
+read-only secret channel; never place the env file in an image, ConfigMap,
+repository, log, or command-line value. Before switching back to `internal`,
+complete one final sync and stop the legacy owner.
+
+## 3. Shadow configuration
 
 Run `llmap` on private canary sockets with `auth.mode = "observe"`. Add accounts
 one at a time. Compare classified outcomes, time-to-first-byte, stream
@@ -44,7 +72,7 @@ completion, sticky-session behavior, provider attribution, and redaction. Do
 not mirror real prompt bodies merely to test the new proxy; use an explicitly
 approved synthetic workload.
 
-## 3. Canary callers
+## 4. Canary callers
 
 Move designated low-risk clients to the reverse endpoint, then the forward
 endpoint if they need it. The rollback is client/ingress routing back to Python;
@@ -52,14 +80,14 @@ keep the old account configuration and health checks intact. Any duplicate send
 must be initiated by a caller that knows the operation is safe, never by the
 proxy after an ambiguous stream failure.
 
-## 4. Enforce and expand
+## 5. Enforce and expand
 
 After observe-mode evidence shows every caller sends a token from an active
 configured account, enable enforce for the canary. Expand traffic in measured
 steps while comparing authentication, rate-limit, overload, transport, and
 latency signals.
 
-## 5. Soak and retire
+## 6. Soak and retire
 
 Require all [GA readiness](ga-readiness.md) gates plus 30 consecutive days with
 no severity-1/2 security or data-plane regression, tested backup/restore, and a

@@ -16,6 +16,20 @@ Account outcomes have distinct effects:
 - other `5xx` and network failures clear sticky bindings for future traffic.
 - no outcome causes unsafe automatic replay after the streaming boundary.
 
+## OAuth refresh ownership
+
+Use one refresh owner for each OAuth token family. The default
+`oauth.refresh_mode = "internal"` makes this process the owner. Use `external`
+only with a monitored credential synchronization job. Alert if that job fails,
+its source is stale, or active credentials approach expiry without a successful
+sync. `/ready` does not prove usable upstream credentials.
+
+During legacy coexistence the job must use `--credentials-only`; regular
+`--replace` would overwrite local pause and residential-egress policy. Before
+changing ownership, take a backup, complete one final sync, stop the old owner,
+change the setting, restart, and prove a small authenticated request. Never
+overlap the two owners.
+
 ## Account runbook
 
 Pause before planned credential or proxy work. Confirm it disappears from the
