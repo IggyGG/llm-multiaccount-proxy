@@ -66,18 +66,22 @@ not end-to-end proof.
 
 ## Current release-candidate evidence
 
-`v0.1.0-rc.12` is built from source commit
-`a6ab5fc0252cba3f87611d03f3addf4e6ee6af21`. Its published multi-platform
+`v0.1.0-rc.13` is built from source commit
+`72dd958478e05f7d0d43a2e0b9b083c14b8d9085`. Its published multi-platform
 image is
-`ghcr.io/iggygg/llm-multiaccount-proxy@sha256:c1d3b3b2df65d7be579edf09e270f1ea75f7535f61114eb253abed5c13c13757`.
+`ghcr.io/iggygg/llm-multiaccount-proxy@sha256:848234bc47621a6e0569269d45cebef4035df61d6cf833204000cf1174c565ca`.
 
-- [Source CI](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34297000444),
-  [security policy](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34297000469),
-  and [CodeQL](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34297000470)
+- [Source CI](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34311213816),
+  [security policy](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34311213756),
+  and [CodeQL](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34311213701)
   are green on the release commit.
-- The [release workflow](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34297022111)
-  published five checksum-verified binaries plus a signed linux/amd64 and
-  linux/arm64 image with per-platform SPDX and SLSA attestations.
+- The [release workflow](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34311785107)
+  published five checksum-verified binaries and a container SPDX document as
+  11 release assets, plus a signed linux/amd64 and linux/arm64 image with
+  per-platform provenance attestations. The workflow executed both published
+  container architectures before publishing the release.
+- Keyless Cosign verification binds the immutable image digest to the
+  repository's `release.yml` workflow and its annotated RC13 tag.
 - Both published container binaries are statically linked and contain no ELF
   `PT_INTERP` program header. Docker Scout reports no critical or high
   vulnerabilities for either architecture.
