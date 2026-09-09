@@ -26,6 +26,8 @@ Use this map according to the job you are doing.
 - [Acceptance test plan](uat.md): human-observable journeys for a release candidate.
 - [GA readiness](ga-readiness.md): evidence required for the first stable release.
 - [RC1 evidence](rc1-evidence.md): automated contract bundle and live-proof boundaries.
+- [RC13 live canary](live-canary-rc13.md): redacted post-restart API, provider,
+  sticky-session, audit, and browser evidence.
 - [Product story](product-story.md): who it is for and how to explain its value responsibly.
 
 The [HTTP API reference](api.md) documents public and administrator routes.
