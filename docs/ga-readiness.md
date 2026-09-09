@@ -87,16 +87,21 @@ image is
   vulnerabilities for either architecture.
 - The image is anonymously pullable, runs as `10001:10001`, and carries the
   exact source and version labels above.
+- The [RC13 live canary](live-canary-rc13.md) passed a fresh-pod persistence
+  check, enforce-mode client and administrator authentication, a real
+  non-streaming and streaming provider journey, sticky routing, audit
+  redaction, and branded browser UAT against the immutable digest.
 
 These artifacts close the automated release-security bundle only. Independent
 penetration testing, a live restore drill, load/soak qualification, live canary
-evidence, 30 clean days, and reproducible-build comparison remain open.
+soak and rollback rehearsal, 30 clean days, and reproducible-build comparison
+remain open.
 
 Release owners attach CI URLs, tag object ID, signed image digest, scan reports,
 UAT records, canary dashboards, restore record, rollback record, and soak dates
 to the release issue.
 
 Automated scope and explicit live boundaries are mapped in
-[RC1 evidence](rc1-evidence.md). The synthetic checks do not close the restore,
-load/soak, penetration-test, live-canary, or stable-release gates by
-themselves.
+[RC1 evidence](rc1-evidence.md). The RC13 canary closes one bounded live
+journey, but neither it nor the synthetic checks close the restore, load/soak,
+penetration-test, sustained-canary, rollback, or stable-release gates.
