@@ -60,22 +60,22 @@ not end-to-end proof.
 - [x] Forgejo-to-GitHub push mirror configured for branches and tags.
 - [x] Forgejo and GitHub protected branches require review and CI; the
   scheduled mirror parity monitor is green.
-- [ ] Reproducible container and multi-platform binaries published from an
+- [x] Reproducible container and multi-platform binaries published from an
   immutable annotated tag with checksums, SBOM, provenance, and a signed OCI
   image digest.
 
 ## Current release-candidate evidence
 
-`v0.1.0-rc.9` is built from source commit
-`8bd9d2a785f633289e4e79f9f02359875e520202`. Its published multi-platform
+`v0.1.0-rc.12` is built from source commit
+`a6ab5fc0252cba3f87611d03f3addf4e6ee6af21`. Its published multi-platform
 image is
-`ghcr.io/iggygg/llm-multiaccount-proxy@sha256:c68f8e5b486fd850e99497674f9e5f3d3b492477cc252fd5bd86ef8721b1d6ed`.
+`ghcr.io/iggygg/llm-multiaccount-proxy@sha256:c1d3b3b2df65d7be579edf09e270f1ea75f7535f61114eb253abed5c13c13757`.
 
-- [Source CI](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34271369581),
-  [security policy](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34271369543),
-  and [CodeQL](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34271369628)
+- [Source CI](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34297000444),
+  [security policy](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34297000469),
+  and [CodeQL](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34297000470)
   are green on the release commit.
-- The [release workflow](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34272008266)
+- The [release workflow](https://github.com/IggyGG/llm-multiaccount-proxy/actions/runs/34297022111)
   published five checksum-verified binaries plus a signed linux/amd64 and
   linux/arm64 image with per-platform SPDX and SLSA attestations.
 - Both published container binaries are statically linked and contain no ELF
