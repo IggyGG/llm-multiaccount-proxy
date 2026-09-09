@@ -15,6 +15,11 @@ required = {
     "publication after uploads": 'gh release edit "${GITHUB_REF_NAME}"',
     "repository context for checkout-free jobs": "GH_REPO: ${{ github.repository }}",
     "tag and package version equality": 'test "v${package_version}" = "${GITHUB_REF_NAME}"',
+    "multi-architecture manifest inspection": 'docker buildx imagetools inspect --raw "${IMAGE}@${DIGEST}"',
+    "amd64 child manifest selection": '.platform.architecture == "amd64"',
+    "arm64 child manifest selection": '.platform.architecture == "arm64"',
+    "amd64 child manifest execution": '"${IMAGE}@${amd64_digest}" --version',
+    "arm64 child manifest execution": '"${IMAGE}@${arm64_digest}" --version',
 }
 
 missing = [name for name, fragment in required.items() if fragment not in workflow]

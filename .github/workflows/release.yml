@@ -110,8 +110,11 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
-          docker run --rm --platform linux/amd64 "${IMAGE}@${DIGEST}" --version
-          docker run --rm --platform linux/arm64 "${IMAGE}@${DIGEST}" --version
+          manifest_index=$(docker buildx imagetools inspect --raw "${IMAGE}@${DIGEST}")
+          amd64_digest=$(jq -er '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest' <<<"${manifest_index}")
+          arm64_digest=$(jq -er '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "arm64") | .digest' <<<"${manifest_index}")
+          docker run --rm --platform linux/amd64 "${IMAGE}@${amd64_digest}" --version
+          docker run --rm --platform linux/arm64 "${IMAGE}@${arm64_digest}" --version
       - uses: sigstore/cosign-installer@v4.1.2
       - env:
           IMAGE: ghcr.io/iggygg/llm-multiaccount-proxy

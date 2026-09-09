@@ -50,16 +50,29 @@ fn container_binary_uses_rustc_static_musl_linkage_without_raw_static_override()
 
 #[test]
 fn release_executes_both_container_architectures_before_signing() {
+    let inspection = RELEASE_WORKFLOW
+        .find("docker buildx imagetools inspect --raw \"${IMAGE}@${DIGEST}\"")
+        .expect("the release must inspect the published multi-architecture index");
+    assert!(
+        RELEASE_WORKFLOW.contains(".platform.architecture == \"amd64\""),
+        "the release must select the amd64 child manifest"
+    );
+    assert!(
+        RELEASE_WORKFLOW.contains(".platform.architecture == \"arm64\""),
+        "the release must select the arm64 child manifest"
+    );
     let amd64 = RELEASE_WORKFLOW
-        .find("docker run --rm --platform linux/amd64 \"${IMAGE}@${DIGEST}\" --version")
-        .expect("the release must execute the published amd64 image");
+        .find("docker run --rm --platform linux/amd64 \"${IMAGE}@${amd64_digest}\" --version")
+        .expect("the release must execute the published amd64 child image");
     let arm64 = RELEASE_WORKFLOW
-        .find("docker run --rm --platform linux/arm64 \"${IMAGE}@${DIGEST}\" --version")
-        .expect("the release must execute the published arm64 image through QEMU");
+        .find("docker run --rm --platform linux/arm64 \"${IMAGE}@${arm64_digest}\" --version")
+        .expect("the release must execute the published arm64 child image through QEMU");
     let signing = RELEASE_WORKFLOW
         .find("cosign sign --yes \"${IMAGE}@${DIGEST}\"")
         .expect("the release must sign the published image");
 
+    assert!(inspection < amd64);
+    assert!(inspection < arm64);
     assert!(amd64 < signing);
     assert!(arm64 < signing);
 }
